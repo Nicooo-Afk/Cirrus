@@ -1,0 +1,52 @@
+env:
+  DEVICE: garnet
+  MANIFEST_URL: https://github.com/PitchBlackRecoveryProject/manifest_pb
+  MANIFEST_BRANCH: android-12.1
+  CCACHE_DIR: /tmp/ccache
+  USE_CCACHE: 1
+
+task:
+  build_recovery:
+    container:
+      image: ubuntu:22.04
+    install_script:
+      - apt update
+      - DEBIAN_FRONTEND=noninteractive apt install -y \
+          git wget python3 unzip bc bison build-essential curl ca-certificates \
+          ccache flex libncurses5-dev libssl-dev lzop openssh-client pngcrush \
+          schedtool squashfs-tools xsltproc zip zlib1g-dev liblz4-tool libxml2 \
+          libxml2-utils liblzma-dev openjdk-8-jdk
+
+    setup_script:
+      - git config --global user.name "Nico"
+      - git config --global user.email "dzakialfariz1742gmail.com"
+      - mkdir -p ~/android && cd ~/android
+
+      - curl https://storage.googleapis.com/git-repo-downloads/repo > repo
+      - chmod a+x repo
+      - mv repo /usr/local/bin/
+
+      - repo init -u ${MANIFEST_URL} -b ${MANIFEST_BRANCH} --depth=1
+      - repo sync -j$(nproc) --no-tags --no-clone-bundle
+
+      - git clone https://github.com/kibria5/device_xiaomi_garnet-pbrp.git device/xiaomi/garnet-pbrp
+      - git clone https://github.com/kibria5/device_xiaomi_sm84xx-common-pbrp.git device/xiaomi/sm84xx-common-pbrp
+      - git clone https://github.com/garnet-random/android_device_xiaomi_garnet.git device/xiaomi/garnet
+      - git clone https://github.com/garnet-random/android_kernel_xiaomi_sm7435-devicetrees.git kernel/xiaomi/sm7435-devicetrees
+      - git clone https://github.com/garnet-random/android_kernel_xiaomi_sm7435-modules.git kernel/xiaomi/sm7435-modules
+      - git clone https://github.com/garnet-random/android_kernel_xiaomi_sm7435.git kernel/xiaomi/sm7435
+
+      - export USE_CCACHE=1
+      - export CCACHE_DIR=${CCACHE_DIR}
+      - ccache -M 10G
+      - ccache -o compression=true
+
+      - source build/envsetup.sh
+      - lunch pb_${DEVICE}-eng
+
+    build_script:
+      - make -j$(nproc) recoveryimage
+      - ccache -s
+
+    artifacts:
+      - path: out/target/product/${DEVICE}/recovery.img
